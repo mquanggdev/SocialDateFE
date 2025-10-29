@@ -10,7 +10,7 @@ import { User } from "@/types/user";
 const navItems = [
   { label: "Bảng Feed", href: "/feed" },
   { label: "Bạn bè", href: "/friends" },
-  { label: "Chat", href: "/chat" },
+  { label: "Chat", href: "/chats" },
   { label: "Hồ sơ", href: "/profile" },
   { label: "Hẹn Hò", href: "/dating" },
 ];
@@ -32,7 +32,7 @@ export default function Navbar({ currentPath }: { currentPath: string }) {
         href="/feed"
         className="text-2xl font-bold tracking-wide hover:opacity-90 transition"
       >
-        💖 LoveConnect
+        💖 Social Dating
       </Link>
 
       {/* Mobile menu button */}

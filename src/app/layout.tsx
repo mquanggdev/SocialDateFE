@@ -4,7 +4,7 @@ import { AuthProvider } from '@/contexts/authContext';
 import { SocketProvider } from '@/contexts/socketContext';
 
 export const metadata: Metadata = {
-  title: 'Date And Live',
+  title: 'Social Date',
   description: 'It is a blessing to have friends and a partner.',
 };
 
