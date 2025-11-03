@@ -8,6 +8,7 @@ import {
   Phone,
   Video,
   Info,
+  Smile,
 } from "lucide-react";
 import { Message } from "@/types/message";
 import {
@@ -19,6 +20,7 @@ import { useAuth } from "@/contexts/authContext";
 import { useSocket } from "@/contexts/socketContext";
 import Swal from "sweetalert2";
 import { showConfirm } from "@/components/ui/Swal";
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 
 export default function RoomPage() {
   const [rooms, setRooms] = useState<Rooms[]>([]);
@@ -29,8 +31,10 @@ export default function RoomPage() {
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [isTypingSent, setIsTypingSent] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+  const [showEmoji, setShowEmoji] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
   const { user, isLoading } = useAuth();
   const { socket } = useSocket();
 
@@ -91,11 +95,12 @@ export default function RoomPage() {
     },
     [socket, user]
   );
+
   // Chọn phòng
   const handleSelectRoom = (room: Rooms) => {
     setSelectedRoom(room);
-    setIsTyping(false); // Reset trạng thái typing của bạn bè
-    setIsTypingSent(false); // Reset trạng thái đã gửi typing
+    setIsTyping(false);
+    setIsTypingSent(false);
     if (room.room_id) {
       fetchMessages(room.room_id);
     } else {
@@ -119,7 +124,6 @@ export default function RoomPage() {
         type: "text" as const,
       };
 
-      // Cập nhật tạm thời lên UI
       const fakeMsg: Message = {
         ...message,
         _id: Date.now().toString(),
@@ -127,10 +131,11 @@ export default function RoomPage() {
         is_recalled: false,
         timestamp: new Date().toISOString(),
       };
-      // Gửi tin nhắn qua socket
+
       socket.emit("CLIENT_SEND_MESSAGE", message);
       setNewMessage("");
-      // Cập nhật last_message của room
+      setShowEmoji(false);
+
       setRooms((prev) =>
         prev.map((room) =>
           room.room_id === selectedRoom.room_id
@@ -178,10 +183,29 @@ export default function RoomPage() {
         room_id: selectedRoom.room_id,
         user_id: user._id,
       });
-      setIsTypingSent(false); // Reset để cho phép gửi CLIENT_TYPING mới
-    }, 3000); // Ngừng typing sau 3 giây
+      setIsTypingSent(false);
+    }, 3000);
   };
   const debouncedHandleTyping = debounce(handleTyping, 200);
+
+  // Thêm emoji
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setNewMessage((prev) => prev + emojiData.emoji);
+  };
+
+  // Đóng EmojiPicker khi click ra ngoài
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target as Node)
+      ) {
+        setShowEmoji(false);
+      }
+    };
+    if (showEmoji) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showEmoji]);
 
   // Fetch danh sách phòng khi user đăng nhập
   useEffect(() => {
@@ -253,27 +277,11 @@ export default function RoomPage() {
       message_id: string;
       room_id: string;
     }) => {
-      // Cập nhật tin nhắn thành "Tin nhắn đã bị thu hồi"
       setMessages((prev) =>
         prev.map((msg) =>
           msg._id === message_id
             ? { ...msg, is_recalled: true, content: "Tin nhắn đã bị thu hồi" }
             : msg
-        )
-      );
-      // Cập nhật last_message nếu tin nhắn bị thu hồi là last_message
-      setRooms((prev) =>
-        prev.map((room) =>
-          room.room_id === room_id && room.last_message?._id === message_id
-            ? {
-                ...room,
-                last_message: {
-                  ...room.last_message,
-                  is_recalled: true,
-                  content: "Tin nhắn đã bị thu hồi",
-                },
-              }
-            : room
         )
       );
     };
@@ -302,18 +310,12 @@ export default function RoomPage() {
       }
     };
 
-    const onError = ({ message }: { message: string }) => {
-      console.error("Lỗi từ server:", message);
-      setError(message);
-    };
-
     socket.on("SERVER_RETURN_MESSAGE", onReceiveMessage);
     socket.on("SERVER_RETURN_USER_ONLINE", onUserOnline);
     socket.on("SERVER_RETURN_MESSAGES_READ", onMessagesRead);
     socket.on("SERVER_RETURN_RECALL_MESSAGE", onRecallMessage);
     socket.on("SERVER_RETURN_TYPING", onTyping);
     socket.on("SERVER_RETURN_STOP_TYPING", onStopTyping);
-    socket.on("error", onError);
 
     return () => {
       socket.off("SERVER_RETURN_MESSAGE", onReceiveMessage);
@@ -322,18 +324,16 @@ export default function RoomPage() {
       socket.off("SERVER_RETURN_RECALL_MESSAGE", onRecallMessage);
       socket.off("SERVER_RETURN_TYPING", onTyping);
       socket.off("SERVER_RETURN_STOP_TYPING", onStopTyping);
-      socket.off("error", onError);
     };
   }, [socket, user, selectedRoom]);
 
-  // Auto scroll khi có tin nhắn mới
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Loading and Error */}
+    <div className="max-h-screen bg-gray-50">
+      {/* Loading & Error */}
       {loading && (
         <div className="text-center py-12">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
@@ -345,13 +345,13 @@ export default function RoomPage() {
           <p className="text-red-500">{error}</p>
         </div>
       )}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex space-x-6 h-[calc(100vh-4rem)]">
-        {/* Sidebar: Danh sách phòng */}
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex space-x-6 h-[calc(100vh-4rem)]">
+        {/* Sidebar */}
         <div className="w-1/3 bg-white rounded-lg border border-gray-200 p-4 overflow-y-auto">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Phòng trò chuyện
           </h2>
-
           {!loading && !error && (
             <div className="space-y-2">
               {rooms.map((room) => (
@@ -383,15 +383,8 @@ export default function RoomPage() {
                     {room.last_message && (
                       <p className="text-sm text-gray-500 truncate">
                         {room.last_message.sender_id === user?._id
-                          ? `Bạn:${room.last_message.content}`
+                          ? `Bạn: ${room.last_message.content}`
                           : room.last_message.content}
-
-                        <span className="ml-1">
-                          ·{" "}
-                          {new Date(
-                            room.last_message.timestamp
-                          ).toLocaleTimeString()}
-                        </span>
                       </p>
                     )}
                   </div>
@@ -401,11 +394,12 @@ export default function RoomPage() {
           )}
         </div>
 
-        {/* Khu vực chat */}
+        {/* Chat Area */}
         <div className="w-2/3 bg-white rounded-lg border border-gray-200 flex flex-col">
           {selectedRoom ? (
             <>
-              <div className="flex p-4 border-b border-gray-200 ">
+              {/* Header */}
+              <div className="flex p-4 border-b border-gray-200">
                 <img
                   src={selectedRoom.friend.avatar_url || "default-avatar.png"}
                   alt={selectedRoom.friend.full_name}
@@ -423,7 +417,7 @@ export default function RoomPage() {
                 </h2>
               </div>
 
-              {/* Tin nhắn */}
+              {/* Messages */}
               <div className="flex-1 p-4 overflow-y-auto">
                 {messages.map((msg) => (
                   <div
@@ -463,15 +457,6 @@ export default function RoomPage() {
                           </button>
                         )}
                       </p>
-
-                      <p className="text-xs mt-1 opacity-70">
-                        {new Date(msg.timestamp).toLocaleTimeString()}
-                        {msg.sender_id === user?._id && (
-                          <span className="ml-2">
-                            {msg.is_read ? "Đã đọc" : "Đã gửi"}
-                          </span>
-                        )}
-                      </p>
                     </div>
                   </div>
                 ))}
@@ -483,8 +468,26 @@ export default function RoomPage() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Nhập tin nhắn */}
-              <div className="p-4 border-t border-gray-200 flex items-center">
+              {/* Input */}
+              <div className="p-4 border-t border-gray-200 flex items-center relative">
+                {/* Emoji Button */}
+                <button
+                  onClick={() => setShowEmoji((prev) => !prev)}
+                  className="p-2 mr-2 text-gray-500 hover:text-pink-500"
+                >
+                  <Smile size={22} />
+                </button>
+
+                {/* Emoji Picker */}
+                {showEmoji && (
+                  <div
+                    ref={emojiPickerRef}
+                    className="absolute bottom-14 left-4 z-50"
+                  >
+                    <EmojiPicker onEmojiClick={handleEmojiClick} />
+                  </div>
+                )}
+
                 <input
                   type="text"
                   value={newMessage}

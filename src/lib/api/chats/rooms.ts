@@ -13,12 +13,13 @@ export interface Rooms {
     room_id: string;
     sender_id: string;
     receiver_id: string;
-    content: string;
-    type: "text" | "call";
+    content?: string;
+    image_url?: string;
+    type: "text" | "call" | "image";
     is_read: boolean;
     is_recalled: boolean;
     timestamp: string;
-  };
+  } | null;
 }
 
 const getAuthToken = () => {
