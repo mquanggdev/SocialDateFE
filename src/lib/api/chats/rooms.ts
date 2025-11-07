@@ -15,7 +15,7 @@ export interface Rooms {
     receiver_id: string;
     content?: string;
     image_url?: string;
-    type: "text" | "call" | "image";
+    type: "text" | "both" | "image";
     is_read: boolean;
     is_recalled: boolean;
     timestamp: string;
@@ -78,5 +78,43 @@ export const getMessageWithRoomId = async (
     return data.messages;
   } catch (err) {
     throw err instanceof Error ? err : new Error("Lỗi khi tải rooms.");
+  }
+};
+
+interface SendMessageData {
+  receiver_id: string;
+  content: string;
+  image_url: string;
+}
+export const sendMessage = async (
+  dataSend: SendMessageData
+): Promise<Message> => {
+  try {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error("Không tìm thấy token xác thực. Vui lòng đăng nhập lại.");
+    }
+
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_BE_URL}/chats/send-message`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(dataSend),
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.message || "Lỗi gửi tin nhắn");
+    }
+
+    return data.newMessage; // ✅ đúng key với backend
+  } catch (err) {
+    throw err instanceof Error ? err : new Error("Lỗi gửi tin nhắn.");
   }
 };

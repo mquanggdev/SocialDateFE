@@ -1,3 +1,4 @@
+// app/(main)/chat/room/page.tsx
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -9,6 +10,8 @@ import {
   Video,
   Info,
   Smile,
+  X,
+  Trash2Icon,
 } from "lucide-react";
 import { Message } from "@/types/message";
 import {
@@ -18,7 +21,6 @@ import {
 } from "@/lib/api/chats/rooms";
 import { useAuth } from "@/contexts/authContext";
 import { useSocket } from "@/contexts/socketContext";
-import Swal from "sweetalert2";
 import { showConfirm } from "@/components/ui/Swal";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 
@@ -35,10 +37,10 @@ export default function RoomPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { socket } = useSocket();
 
-  // Hàm debounce tự viết
+  // Debounce typing
   const debounce = <T extends (...args: any[]) => void>(
     func: T,
     wait: number
@@ -50,7 +52,7 @@ export default function RoomPage() {
     };
   };
 
-  // Cuộn xuống cuối khi có tin nhắn mới
+  // Cuộn xuống cuối
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -72,21 +74,13 @@ export default function RoomPage() {
     }
   }, [user]);
 
-  // Lấy danh sách tin nhắn theo room_id
+  // Lấy tin nhắn + ĐÁNH DẤU ĐÃ ĐỌC NGAY KHI MỞ PHÒNG
   const fetchMessages = useCallback(
     async (room_id: string) => {
       try {
         setLoading(true);
         const listMessage = await getMessageWithRoomId(room_id);
         setMessages(listMessage);
-
-        // Đánh dấu tin nhắn đã đọc
-        if (socket && user?._id) {
-          socket.emit("CLIENT_MARK_MESSAGES_READ", {
-            room_id,
-            user_id: user._id,
-          });
-        }
       } catch (err: any) {
         setError(err.message || "Lỗi tải tin nhắn");
       } finally {
@@ -99,8 +93,16 @@ export default function RoomPage() {
   // Chọn phòng
   const handleSelectRoom = (room: Rooms) => {
     setSelectedRoom(room);
+    // ĐÁNH DẤU ĐÃ ĐỌC NGAY LẬP TỨC
+    if (socket && user?._id) {
+      socket.emit("CLIENT_MARK_MESSAGES_READ", {
+        room_id: room.room_id,
+        user_id: user._id,
+      });
+    }
     setIsTyping(false);
     setIsTypingSent(false);
+    setShowEmoji(false);
     if (room.room_id) {
       fetchMessages(room.room_id);
     } else {
@@ -110,10 +112,8 @@ export default function RoomPage() {
 
   // Gửi tin nhắn
   const handleSendMessage = async () => {
-    if (!user || !user._id || !socket || !selectedRoom || !newMessage.trim()) {
-      setError("Vui lòng chọn phòng và nhập tin nhắn");
+    if (!user || !user._id || !socket || !selectedRoom || !newMessage.trim())
       return;
-    }
 
     try {
       const message = {
@@ -137,10 +137,10 @@ export default function RoomPage() {
       setShowEmoji(false);
 
       setRooms((prev) =>
-        prev.map((room) =>
-          room.room_id === selectedRoom.room_id
-            ? { ...room, last_message: fakeMsg }
-            : room
+        prev.map((r) =>
+          r.room_id === selectedRoom.room_id
+            ? { ...r, last_message: fakeMsg }
+            : r
         )
       );
     } catch (err: any) {
@@ -153,9 +153,9 @@ export default function RoomPage() {
     if (!socket || !selectedRoom) return;
     const confirmed = await showConfirm({
       icon: "warning",
-      title: "Bạn có chắc muốn xóa?",
+      title: "Thu hồi tin nhắn?",
       text: "Hành động này không thể hoàn tác.",
-      confirmText: "Xóa",
+      confirmText: "Thu hồi",
       cancelText: "Hủy",
     });
     if (confirmed) {
@@ -167,7 +167,7 @@ export default function RoomPage() {
     }
   };
 
-  // Xử lý typing
+  // Typing
   const handleTyping = () => {
     if (!socket || !selectedRoom || !user?._id || isTypingSent) return;
     socket.emit("CLIENT_TYPING", {
@@ -175,9 +175,7 @@ export default function RoomPage() {
       user_id: user._id,
     });
     setIsTypingSent(true);
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
       socket.emit("CLIENT_STOP_TYPING", {
         room_id: selectedRoom.room_id,
@@ -193,7 +191,7 @@ export default function RoomPage() {
     setNewMessage((prev) => prev + emojiData.emoji);
   };
 
-  // Đóng EmojiPicker khi click ra ngoài
+  // Đóng emoji khi click ngoài
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -203,18 +201,20 @@ export default function RoomPage() {
         setShowEmoji(false);
       }
     };
-    if (showEmoji) document.addEventListener("mousedown", handleClickOutside);
+    if (showEmoji) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showEmoji]);
 
-  // Fetch danh sách phòng khi user đăng nhập
+  // Load rooms
   useEffect(() => {
-    if (user && !isLoading) {
+    if (user && !authLoading) {
       fetchRooms();
     }
-  }, [fetchRooms, user, isLoading]);
+  }, [fetchRooms, user, authLoading]);
 
-  // Xử lý sự kiện socket
+  // Socket events
   useEffect(() => {
     if (!socket || !user || !user._id) return;
 
@@ -239,8 +239,8 @@ export default function RoomPage() {
       userId: string;
     }) => {
       setRooms((prev) =>
-        prev.map((room) =>
-          room.friend._id === userId
+        prev.map((room) => {
+          return room.friend._id === userId
             ? {
                 ...room,
                 friend: {
@@ -248,8 +248,8 @@ export default function RoomPage() {
                   status: status as "online" | "offline",
                 },
               }
-            : room
-        )
+            : room;
+        })
       );
     };
 
@@ -270,6 +270,7 @@ export default function RoomPage() {
         );
       }
     };
+
     const onRecallMessage = ({
       message_id,
       room_id,
@@ -280,7 +281,12 @@ export default function RoomPage() {
       setMessages((prev) =>
         prev.map((msg) =>
           msg._id === message_id
-            ? { ...msg, is_recalled: true, content: "Tin nhắn đã bị thu hồi" }
+            ? {
+                ...msg,
+                is_recalled: true,
+                content: "Tin nhắn đã bị thu hồi",
+                imageUrl: undefined,
+              }
             : msg
         )
       );
@@ -327,17 +333,31 @@ export default function RoomPage() {
     };
   }, [socket, user, selectedRoom]);
 
+  // Cuộn khi có tin nhắn mới
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (!selectedRoom) return;
+    const updated = rooms.find((r) => r.room_id === selectedRoom.room_id);
+    if (
+      updated &&
+      JSON.stringify(updated.friend) !== JSON.stringify(selectedRoom.friend)
+    ) {
+      setSelectedRoom(updated);
+    }
+  }, [rooms]);
 
   return (
     <div className="max-h-screen bg-gray-50">
       {/* Loading & Error */}
       {loading && (
-        <div className="text-center py-12">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
-          <p className="text-gray-500 mt-3">Đang tải...</p>
+        <div className="flex justify-center items-center h-64">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
+            <p className="text-gray-500 mt-3">Đang tải...</p>
+          </div>
         </div>
       )}
       {error && (
@@ -352,45 +372,51 @@ export default function RoomPage() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Phòng trò chuyện
           </h2>
-          {!loading && !error && (
+          {!loading && !error && rooms.length > 0 ? (
             <div className="space-y-2">
               {rooms.map((room) => (
                 <div
                   key={room.room_id}
                   onClick={() => handleSelectRoom(room)}
-                  className={`flex items-center p-3 rounded-lg hover:bg-gray-100 cursor-pointer ${
+                  className={`flex items-center p-3 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors ${
                     selectedRoom?.room_id === room.room_id ? "bg-gray-100" : ""
                   }`}
                 >
                   <img
                     src={room.friend.avatar_url || "default-avatar.png"}
                     alt={room.friend.full_name}
-                    className="w-10 h-10 rounded-full mr-3"
+                    className="w-10 h-10 rounded-full mr-3 object-cover"
                   />
-                  <div className="flex-1">
-                    <div className="flex items-center">
-                      <p className="font-medium text-gray-900">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium text-gray-900 truncate">
                         {room.friend.full_name}
                       </p>
                       <span
-                        className={`ml-2 inline-block h-2 w-2 rounded-full ${
+                        className={`inline-block h-2 w-2 rounded-full ${
                           room.friend.status === "online"
                             ? "bg-green-500"
                             : "bg-gray-400"
                         }`}
-                      ></span>
+                      />
                     </div>
                     {room.last_message && (
                       <p className="text-sm text-gray-500 truncate">
-                        {room.last_message.sender_id === user?._id
-                          ? `Bạn: ${room.last_message.content}`
-                          : room.last_message.content}
+                        {room.last_message.is_recalled
+                          ? "Tin nhắn đã bị thu hồi"
+                          : room.last_message.sender_id === user?._id
+                          ? `Bạn: ${room.last_message.content || "[Hình ảnh]"}`
+                          : room.last_message.content || "[Hình ảnh]"}
                       </p>
                     )}
                   </div>
                 </div>
               ))}
             </div>
+          ) : (
+            !loading && (
+              <p className="text-gray-500 text-center">Chưa có phòng chat</p>
+            )
           )}
         </div>
 
@@ -399,30 +425,39 @@ export default function RoomPage() {
           {selectedRoom ? (
             <>
               {/* Header */}
-              <div className="flex p-4 border-b border-gray-200">
-                <img
-                  src={selectedRoom.friend.avatar_url || "default-avatar.png"}
-                  alt={selectedRoom.friend.full_name}
-                  className="w-10 h-10 rounded-full mr-3"
-                />
-                <h2 className="text-lg font-semibold text-gray-900 mt-2.5">
-                  {selectedRoom.friend.full_name}
-                  <span
-                    className={`ml-2 inline-block h-2 w-2 rounded-full ${
-                      selectedRoom.friend.status === "online"
-                        ? "bg-green-500"
-                        : "bg-gray-400"
-                    }`}
-                  ></span>
-                </h2>
+              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                <div className="flex items-center">
+                  <img
+                    src={selectedRoom.friend.avatar_url || "default-avatar.png"}
+                    alt={selectedRoom.friend.full_name}
+                    className="w-10 h-10 rounded-full mr-3 object-cover"
+                  />
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      {selectedRoom.friend.full_name}
+                    </h2>
+                    <p className="text-xs text-gray-500 flex items-center">
+                      <span
+                        className={`inline-block h-2 w-2 rounded-full mr-1 ${
+                          selectedRoom.friend.status === "online"
+                            ? "bg-green-500"
+                            : "bg-gray-400"
+                        }`}
+                      />
+                      {selectedRoom.friend.status === "online"
+                        ? "Đang hoạt động"
+                        : "Offline"}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Messages */}
-              <div className="flex-1 p-4 overflow-y-auto">
+              <div className="flex-1 p-4 overflow-y-auto space-y-4">
                 {messages.map((msg) => (
                   <div
                     key={msg._id}
-                    className={`mb-4 flex ${
+                    className={`flex ${
                       msg.sender_id === user?._id
                         ? "justify-end"
                         : "justify-start"
@@ -434,11 +469,12 @@ export default function RoomPage() {
                           selectedRoom.friend.avatar_url || "default-avatar.png"
                         }
                         alt="avatar"
-                        className="w-8 h-8 rounded-full"
+                        className="w-8 h-8 rounded-full mr-2 object-cover"
                       />
                     )}
+
                     <div
-                      className={`max-w-xs rounded-lg p-3 ${
+                      className={`max-w-xs rounded-xl p-3 shadow-sm ${
                         msg.is_recalled
                           ? "bg-gray-200 text-gray-500 italic"
                           : msg.sender_id === user?._id
@@ -446,65 +482,105 @@ export default function RoomPage() {
                           : "bg-gray-100 text-gray-900"
                       }`}
                     >
-                      <p>
-                        {msg.content}
+                      {/* HÌNH ẢNH */}
+                      {msg.image_url && !msg.is_recalled && (
+                        <div className="mb-2">
+                          <img
+                            src={msg.image_url}
+                            alt="Sent"
+                            className="w-full max-w-[200px] h-auto rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => window.open(msg.image_url, "_blank")}
+                          />
+                        </div>
+                      )}
+
+                      {/* NỘI DUNG */}
+                      {msg.content && !msg.is_recalled && (
+                        <p className="break-words">{msg.content}</p>
+                      )}
+
+                      {msg.is_recalled && (
+                        <p className="text-xs">Tin nhắn đã bị thu hồi</p>
+                      )}
+
+                      <div className="flex justify-end">
+                        {/* TRẠNG THÁI GỬI / ĐỌC */}
+                        {msg.sender_id === user?._id && !msg.is_recalled && (
+                          <p className="text-[11px] text-right mt-1 opacity-80">
+                            {msg.is_read ? "Đã đọc" : "Đã gửi"}
+                          </p>
+                        )}
+
+                        {/* NÚT THU HỒI (chỉ hiện cho người gửi) */}
                         {!msg.is_recalled && msg.sender_id === user?._id && (
                           <button
                             onClick={() => handleRecallMessage(msg._id)}
-                            className="ml-2 text-gray-500 hover:text-red-500"
+                            className="mt-1 text-xs opacity-70 hover:opacity-100 flex items-center gap-1 ml-3"
                           >
-                            <EllipsisVertical size={16} />
+                            <Trash2Icon size={14} />
                           </button>
                         )}
-                      </p>
+                      </div>
                     </div>
                   </div>
                 ))}
+
+                {/* Typing indicator */}
                 {isTyping && (
-                  <p className="text-sm text-gray-500 animate-pulse">
-                    {selectedRoom.friend.full_name} đang nhập...
-                  </p>
+                  <div className="flex items-center text-sm text-gray-500 animate-pulse">
+                    <div className="w-8 h-8 rounded-full mr-2 bg-gray-200 animate-pulse" />
+                    <p>{selectedRoom.friend.full_name} đang nhập...</p>
+                  </div>
                 )}
+
                 <div ref={messagesEndRef} />
               </div>
 
               {/* Input */}
-              <div className="p-4 border-t border-gray-200 flex items-center relative">
-                {/* Emoji Button */}
-                <button
-                  onClick={() => setShowEmoji((prev) => !prev)}
-                  className="p-2 mr-2 text-gray-500 hover:text-pink-500"
-                >
-                  <Smile size={22} />
-                </button>
+              <div className="p-4 border-t border-gray-200 relative">
+                <div className="flex items-center gap-2">
+                  {/* Emoji */}
+                  <button
+                    onClick={() => setShowEmoji((prev) => !prev)}
+                    className="p-2 text-gray-500 hover:text-pink-500 transition-colors"
+                  >
+                    <Smile size={22} />
+                  </button>
+
+                  {/* Input */}
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => {
+                      setNewMessage(e.target.value);
+                      debouncedHandleTyping();
+                    }}
+                    onKeyPress={(e) =>
+                      e.key === "Enter" && !e.shiftKey && handleSendMessage()
+                    }
+                    placeholder="Nhập tin nhắn..."
+                    className="flex-1 px-4 py-2 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  />
+
+                  {/* Send */}
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={!newMessage.trim()}
+                    className="p-2 bg-pink-500 text-white rounded-full hover:bg-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Send size={20} />
+                  </button>
+                </div>
 
                 {/* Emoji Picker */}
                 {showEmoji && (
                   <div
                     ref={emojiPickerRef}
-                    className="absolute bottom-14 left-4 z-50"
+                    className="absolute bottom-16 left-4 z-50 shadow-lg"
                   >
                     <EmojiPicker onEmojiClick={handleEmojiClick} />
                   </div>
                 )}
-
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => {
-                    setNewMessage(e.target.value);
-                    debouncedHandleTyping();
-                  }}
-                  onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-                  placeholder="Nhập tin nhắn..."
-                  className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-pink-500"
-                />
-                <button
-                  onClick={handleSendMessage}
-                  className="ml-2 p-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600"
-                >
-                  <Send size={20} />
-                </button>
               </div>
             </>
           ) : (

@@ -79,29 +79,26 @@ export default function FriendsPage() {
     const onAddRequest = ({ infoUser, friendId }: any) => {
       // Nếu mình là người được request
       if (friendId === user._id) {
+        setSuggestedUsers((prev) => prev.filter((r) => r._id !== infoUser._id));
         setFriendRequests((prev) => [...prev, infoUser]);
       }
     };
 
     const onAcceptRequest = ({ infoUser, friendId, roomChatId }: any) => {
-      // friendId ở payload theo backend hiện tại có thể là id của người nhận của event
-      // infoUser luôn là "người kia" — trước khi dùng, ta kiểm tra cho chắc.
       const otherId = infoUser?._id;
       if (!otherId) return;
 
-      // Thêm bạn (chỉ thêm khi chưa có)
+      // Luôn thêm bạn mới vào danh sách bạn bè
       setFriends((prev) => {
         if (prev.some((f) => f._id === otherId)) return prev;
         return [...prev, { ...infoUser, roomChat: roomChatId }];
       });
 
-      // Nếu mình là người chấp nhận (có thể xác định bằng friendId === user._id theo backend hiện tại)
-      if (friendId === user._id) {
-        // Xóa khỏi danh sách "lời mời đến tôi"
-        setFriendRequests((prev) => prev.filter((req) => req._id !== otherId));
-        setSuggestedUsers((prev) => prev.filter((req) => req._id !== otherId));
+      // Nếu friendId KHÔNG trùng với user._id → mình là người chấp nhận
+      if (friendId !== user._id) {
+        setSuggestedUsers((prev) => prev.filter((req) => req._id !== friendId));
       } else {
-        // Còn nếu mình là người gửi (được chấp nhận) thì xóa khỏi sent
+        // Ngược lại → mình là người được chấp nhận
         setSentRequests((prev) => prev.filter((req) => req._id !== otherId));
       }
     };
@@ -121,8 +118,11 @@ export default function FriendsPage() {
       }
     };
 
-    const onRemoveFriend = ({ myId, friendId, myInfo}: any) => {
-      if (friendId === user._id) {
+    const onRemoveFriend = ({ myId, friendId, myInfo, targetInfo }: any) => {
+      // mình là thhằng xóa
+      if (myId === user._id) {
+        setSuggestedUsers((prev) => [...prev, targetInfo]);
+      } else {
         setFriends((prev) => prev.filter((f) => f._id !== myId));
         setSuggestedUsers((prev) => [...prev, myInfo]);
       }
@@ -181,7 +181,6 @@ export default function FriendsPage() {
     if (!user || !socket) return;
     try {
       setFriends((prev) => prev.filter((req) => req._id !== userId));
-      
       socket.emit("CLIENT_REMOVE_FRIEND", { myId: user._id, friendId: userId });
     } catch (err: any) {
       console.error("Lỗi khi xóa bạn:", err);
@@ -192,6 +191,7 @@ export default function FriendsPage() {
   const handleAcceptRequest = async (userId: string) => {
     if (!user || !socket) return;
     try {
+      setFriendRequests((prev) => prev.filter((req) => req._id !== userId));
       socket.emit("CLIENT_ACCEPT_FRIEND_REQUEST", {
         acceptorID: user._id,
         requesterId: userId,
