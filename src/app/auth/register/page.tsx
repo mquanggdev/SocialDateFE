@@ -5,7 +5,7 @@ import RegisterForm from "@/components/auth/Register";
 export default function RegisterPage() {
   return (
     <AuthLayout
-      title="Đăng Ký LoveConnect"
+      title="Đăng Ký Social Dating"
       subtitle="Tạo tài khoản để bắt đầu hành trình tìm kiếm tình yêu của bạn 💖"
     >
       <RegisterForm />

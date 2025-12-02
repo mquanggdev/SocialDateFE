@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { LogOut, Menu } from "lucide-react";
 import { useEffect, useState } from "react";
 import { User } from "@/types/user";
+import { getMe } from "@/lib/api/me.api";
 
 const navItems = [
   { label: "Bảng Feed", href: "/feed" },
@@ -16,7 +17,8 @@ const navItems = [
 ];
 
 export default function Navbar({ currentPath }: { currentPath: string }) {
-  const { user, logout } = useAuth();
+  const {logout } = useAuth();
+  const [user , setUser] = useState<User>() ;
   const [menuOpen, setMenuOpen] = useState(false);
   const router = useRouter();
 
@@ -24,6 +26,15 @@ export default function Navbar({ currentPath }: { currentPath: string }) {
     await logout();
     router.push("/auth/login");
   };
+
+useEffect(() => {
+  const getUser = async () => {
+    const user = await getMe() ;
+    setUser(user)
+  }
+
+  getUser() ;
+},[user])
 
   return (
     <nav className="bg-pink-500 text-white px-6 py-3 shadow-md flex items-center justify-between relative">

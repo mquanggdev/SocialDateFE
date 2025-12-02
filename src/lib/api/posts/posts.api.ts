@@ -1,7 +1,7 @@
 // lib/api.ts
 import { Post, GetPostsResponse } from "@/types/post";
 
-const API_URL = process.env.NEXT_PUBLIC_BE_URL || "http://localhost:3000";
+const API_URL = process.env.NEXT_PUBLIC_BE_URL || "http://localhost:5001";
 
 const getAuthToken = () =>
   typeof window !== "undefined" ? localStorage.getItem("token") : null;

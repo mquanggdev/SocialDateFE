@@ -5,37 +5,38 @@ import { User } from "@/types/user";
 import { callBackend } from "@/lib/api/auth.api";
 import { useSocket } from "./socketContext";
 import { useRouter } from "next/navigation";
+import { getMe } from "@/lib/api/me.api";
 
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
-  token : string;
   logout: () => void;
   isLoading: boolean;
+  token: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
-  const [token , setToken] = useState<string>("");
   const router = useRouter();
   const { connectSocket, disconnectSocket } = useSocket();
 
+
+  // Kiểm tra auth lúc đầu
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = localStorage.getItem("token");
-        if (token) {
-          setToken(token) ;
-          const userData = localStorage.getItem("userData");
-          if (userData) {
-            const parserUser = JSON.parse(userData);
-            setUser(parserUser);
-            connectSocket(token, parserUser._id);
-          }
+        const savedToken = localStorage.getItem("token");
+        const savedUser = await getMe();
+
+        if (savedToken && savedUser) {
+          setToken(savedToken);
+          setUser(savedUser);
+          connectSocket(savedToken, savedUser._id);
         }
       } catch (error) {
         console.error("Auth check failed:", error);
@@ -54,14 +55,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
 
-      // Giả sử backend trả về { token, user }
       localStorage.setItem("token", data.token);
-      localStorage.setItem("userData", JSON.stringify(data.user));
-      setUser(data.user);
-      disconnectSocket();
+      setToken(data.token);
       connectSocket(data.token, data.user._id);
+
+      router.push("/"); // hoặc trang chủ
     } catch (error) {
-      console.error("Login failed:", error);
       throw new Error("Đăng nhập thất bại");
     }
   };
@@ -72,8 +71,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
+      // Có thể tự động login luôn nếu muốn
     } catch (error) {
-      console.error("Register failed:", error);
       throw new Error("Đăng ký thất bại");
     }
   };
@@ -82,12 +81,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("token");
     localStorage.removeItem("userData");
     setUser(null);
+    setToken("");
     disconnectSocket();
     router.replace("/auth/login");
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, isLoading ,token}}>
+    <AuthContext.Provider value={{ user, login, register, logout, isLoading, token }}>
       {children}
     </AuthContext.Provider>
   );

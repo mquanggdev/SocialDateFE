@@ -16,5 +16,3 @@ export async function callBackend(path: string, options: RequestInit = {}) {
 
   return res.json();
 }
-
-

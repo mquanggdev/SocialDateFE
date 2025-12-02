@@ -25,15 +25,18 @@ export interface User {
   };
   friends: string[];
   request_to_friend: string[];
-  request_to_me :string[] ;
+  request_to_me: string[];
   current_match: string | null;
   ready_to_match: {
     is_ready: boolean;
     requested_at: string | null;
     max_wait_time: number;
   };
+  is_dating: boolean;
+  dating_partner: string;
+  pending_like_target?: string;
   status: "online" | "offline" | "busy";
-  socketId?:string;
+  socketId?: string;
   last_active: string;
   created_at: string;
   updated_at: string;

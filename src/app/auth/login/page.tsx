@@ -6,7 +6,7 @@ import AuthLayout from "@/components/auth/layouts/AuthLayout";
 export default function LoginPage() {
   return (
     <AuthLayout
-      title="Đăng Nhập LoveConnect"
+      title="Đăng Nhập Social Dating"
       subtitle="Chào mừng bạn trở lại, hãy tiếp tục hành trình của bạn 💕"
     >
       <LoginForm />

@@ -82,10 +82,10 @@ export default function Home() {
               <div className="bg-white p-6 rounded-lg shadow-md text-center">
                 <Sparkles className="w-12 h-12 text-pink-300 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-pink-800 mb-2">
-                  AI Tình Yêu
+                  AI kiểm duyệt
                 </h3>
                 <p className="text-gray-600">
-                  Gợi ý kết nối dựa trên sở thích và tính cách của bạn
+                  Môi trường lành mạnh 
                 </p>
               </div>
             </div>
